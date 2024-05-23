@@ -31,6 +31,12 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+app.get("/", (req, res) => {
+  res.send("HEB EMAIL SERVER");
+  var timeStamp = moment().format("YYYYMMDDHHmmss");
+  console.log(timeStamp);
+});
+
 // Define route for sending emails with attachments
 app.post('/send-email', upload.none(), async (req, res) => {
   try {
