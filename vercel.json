@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/emailTicket.js": {
+      "maxDuration": 10
+    }
+  }
+}
