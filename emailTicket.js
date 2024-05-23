@@ -62,7 +62,7 @@ app.post('/send-email', upload.none(), async (req, res) => {
       const logoImageBytes = fs.readFileSync('path/to/heblogo.png');
       logoImage = await pdfDoc.embedPng(logoImageBytes);
     } catch (err) {
-      res.status(500).send('Error reading logo');
+      res.status(400).send('Error reading logo');
       console.error('Error reading logo file:', err);
       throw new Error('Logo file read error');
     }
