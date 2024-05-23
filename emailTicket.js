@@ -9,6 +9,8 @@ const uuid = require('uuid'); // Import uuid for generating unique IDs
 const fs = require('fs'); // Import fs for file system operations
 const cors = require('cors');
 const moment = require('moment');
+const path = require('path');
+
 
 // Create an Express app
 const app = express();
@@ -56,24 +58,26 @@ app.post('/send-email', upload.none(), async (req, res) => {
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage();
 
-    // // // Add PNG logo on the top left
-    // // let logoImage;
-    // // try {
-    // //   const logoImageBytes = fs.readFileSync('heblogo.png');
-    // //   logoImage = await pdfDoc.embedPng(logoImageBytes);
-    // // } catch (err) {
-    // //   res.status(400).send('Error reading logo');
-    // //   console.error('Error reading logo file:', err);
-    // //   throw new Error('Logo file read error');
-    // // }
+    // Add PNG logo on the top left
+    let logoImage;
+    try {
+      let logoImageBytesPath = path.join(process.cwd(), 'heblogo.png');
+      let logoImageBytes = fs.readFileSync(logoImageBytesPath);
+      // const logoImageBytes = fs.readFileSync('heblogo.png');
+      logoImage = await pdfDoc.embedPng(logoImageBytes);
+    } catch (err) {
+      res.status(400).send('Error reading logo');
+      console.error('Error reading logo file:', err);
+      throw new Error('Logo file read error');
+    }
     
-    // // const logoDims = 100;
-    // // page.drawImage(logoImage, {
-    // //   x: page.getWidth() * 0.2, // Moved left by 20%
-    // //   y: page.getHeight() * 0.7, // Moved up by 70%
-    // //   width: logoDims,
-    // //   height: logoDims,
-    // // });
+    const logoDims = 100;
+    page.drawImage(logoImage, {
+      x: page.getWidth() * 0.2, // Moved left by 20%
+      y: page.getHeight() * 0.7, // Moved up by 70%
+      width: logoDims,
+      height: logoDims,
+    });
 
     // Add ticket details
     const textX = page.getWidth() * 0.2; // Moved left by 20%
