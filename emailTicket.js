@@ -44,15 +44,15 @@ app.get("/", (req, res) => {
 app.post('/send-email', upload.none(), async (req, res) => {
   try {
     // Extract data from request body
-    const { email, phone_number, type, full_name, gender, mpesaReceipt, amount, eventDesc } = req.body;
+    const { email, phone_number, type, full_name, gender, mpesaReceipt,ticketId, amount, eventDesc } = req.body;
     // const ticketFor = 'Reviving hearts'; // Ticket for always equals to 'Reviving hearts'
 
     // // Generate unique ID for the ticket
     // const ticketId = uuid();
 
-    // // Generate QR code from ticket data and ID
-    // const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc });
-    // const qrCodeImage = await QRCode.toDataURL(qrCodeData);
+    // Generate QR code from ticket data and ID
+    const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc, ticketId });
+    const qrCodeImage = await QRCode.toDataURL(qrCodeData);
 
     // Generate PDF attachment
     const pdfDoc = await PDFDocument.create();
@@ -89,16 +89,18 @@ app.post('/send-email', upload.none(), async (req, res) => {
     page.drawText(`Mpesa Code: ${mpesaReceipt}`, { x: textX, y: textY + 10, size: 14, align: 'center' });
     page.drawText(`Ticket For: ${eventDesc}`, { x: textX, y: textY - 15, size: 14, align: 'center' });
     page.drawText(`Gender: ${gender}`, { x: textX + 150, y: textY + 70, size: 14, align: 'center' });
+    page.drawText(`Phone: ${phone_number}`, { x: textX + 150, y: textY + 40, size: 14, align: 'center' });
 
-    // // Add QR code in the center
-    // const qrDims = 200;
-    // const qrX = (page.getWidth() - qrDims) / 2;
-    // const qrY = textY - 220; // Pushed up by 120 units
-    // const qrCodeImageBuffer = Buffer.from(qrCodeImage.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-    // page.drawImage(await pdfDoc.embedPng(qrCodeImageBuffer), { x: qrX, y: qrY, width: qrDims, height: qrDims });
 
-    // // Add ticket ID underneath the QR code
-    // page.drawText(`Ticket ID: ${ticketId}`, { x: qrX, y: qrY - 20, size: 12 });
+    // Add QR code in the center
+    const qrDims = 200;
+    const qrX = (page.getWidth() - qrDims) / 2;
+    const qrY = textY - 220; // Pushed up by 120 units
+    const qrCodeImageBuffer = Buffer.from(qrCodeImage.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+    page.drawImage(await pdfDoc.embedPng(qrCodeImageBuffer), { x: qrX, y: qrY, width: qrDims, height: qrDims });
+
+    // Add ticket ID underneath the QR code
+    page.drawText(`Ticket ID: ${ticketId}`, { x: qrX, y: qrY - 20, size: 12 });
 
     // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
