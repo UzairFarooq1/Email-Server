@@ -1,7 +1,16 @@
 {
-  "functions": {
-    "api/emailTicket.js": {
-      "maxDuration": 10
+  "version": 2,
+  "builds": [
+    {
+      "src": "emailTicket.js",
+      "use": "@now/node"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "emailTicket.js"
+      
+    }
+  ]
 }
