@@ -56,24 +56,24 @@ app.post('/send-email', upload.none(), async (req, res) => {
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage();
 
-    // Add PNG logo on the top left
-    let logoImage;
-    try {
-      const logoImageBytes = fs.readFileSync('path/to/heblogo.png');
-      logoImage = await pdfDoc.embedPng(logoImageBytes);
-    } catch (err) {
-      res.status(400).send('Error reading logo');
-      console.error('Error reading logo file:', err);
-      throw new Error('Logo file read error');
-    }
+    // // Add PNG logo on the top left
+    // let logoImage;
+    // try {
+    //   const logoImageBytes = fs.readFileSync('heblogo.png');
+    //   logoImage = await pdfDoc.embedPng(logoImageBytes);
+    // } catch (err) {
+    //   res.status(400).send('Error reading logo');
+    //   console.error('Error reading logo file:', err);
+    //   throw new Error('Logo file read error');
+    // }
     
-    const logoDims = 100;
-    page.drawImage(logoImage, {
-      x: page.getWidth() * 0.2, // Moved left by 20%
-      y: page.getHeight() * 0.7, // Moved up by 70%
-      width: logoDims,
-      height: logoDims,
-    });
+    // const logoDims = 100;
+    // page.drawImage(logoImage, {
+    //   x: page.getWidth() * 0.2, // Moved left by 20%
+    //   y: page.getHeight() * 0.7, // Moved up by 70%
+    //   width: logoDims,
+    //   height: logoDims,
+    // });
 
     // Add ticket details
     const textX = page.getWidth() * 0.2; // Moved left by 20%
@@ -126,7 +126,7 @@ app.post('/send-email', upload.none(), async (req, res) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
