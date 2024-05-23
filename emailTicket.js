@@ -14,8 +14,11 @@ const moment = require('moment');
 const app = express();
 
 // Use the cors middleware
-app.use(cors());
-
+app.use(cors({
+  origin: 'https://heb-mpesa-integration.vercel.app', // Update with your frontend URL
+  methods: ['GET', 'POST'], // Specify the allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization'] // Specify the allowed headers
+}));
 // Parse incoming JSON request bodies
 app.use(express.json());
 
