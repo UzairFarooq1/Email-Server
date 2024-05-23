@@ -46,19 +46,26 @@ app.post('/send-email', upload.none(), async (req, res) => {
     const ticketFor = 'Reviving hearts'; // Ticket for always equals to 'Reviving hearts'
 
     // Generate unique ID for the ticket
-    const ticketId = uuid.v4();
+    const ticketId = uuid();
 
     // Generate QR code from ticket data and ID
-    const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender,mpesaReceipt, amount, eventDesc });
+    const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc });
     const qrCodeImage = await QRCode.toDataURL(qrCodeData);
 
     // Generate PDF attachment
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage();
-    
+
     // Add PNG logo on the top left
-    const logoImageBytes = fs.readFileSync('../server/heblogo.png');
-    const logoImage = await pdfDoc.embedPng(logoImageBytes);
+    let logoImage;
+    try {
+      const logoImageBytes = fs.readFileSync('path/to/heblogo.png');
+      logoImage = await pdfDoc.embedPng(logoImageBytes);
+    } catch (err) {
+      console.error('Error reading logo file:', err);
+      throw new Error('Logo file read error');
+    }
+    
     const logoDims = 100;
     page.drawImage(logoImage, {
       x: page.getWidth() * 0.2, // Moved left by 20%
@@ -66,20 +73,17 @@ app.post('/send-email', upload.none(), async (req, res) => {
       width: logoDims,
       height: logoDims,
     });
+
     // Add ticket details
     const textX = page.getWidth() * 0.2; // Moved left by 20%
     let textY = page.getHeight() * 0.5; // Moved down by 50%
 
-    // Add ticket details
     page.drawText(`Name: ${full_name}`, { x: textX, y: textY + 100, size: 18, align: 'center' });
     page.drawText(`Ticket Type: ${type}`, { x: textX, y: textY + 70, size: 14, align: 'center' });
     page.drawText(`Amount: ${amount}`, { x: textX, y: textY + 40, size: 14, align: 'center' });
     page.drawText(`Mpesa Code: ${mpesaReceipt}`, { x: textX, y: textY + 10, size: 14, align: 'center' });
     page.drawText(`Ticket For: ${eventDesc}`, { x: textX, y: textY - 15, size: 14, align: 'center' });
-    page.drawText(`Gender: ${gender}`, { x: textX+150, y: textY + 70, size: 14, align: 'center' });
-    // page.drawText(`Gender: ${gender}`, { x: textX+150, y: textY + 40, size: 14, align: 'center' });
-
-
+    page.drawText(`Gender: ${gender}`, { x: textX + 150, y: textY + 70, size: 14, align: 'center' });
 
     // Add QR code in the center
     const qrDims = 200;
