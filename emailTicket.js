@@ -7,7 +7,7 @@ const { PDFDocument } = require('pdf-lib');
 const QRCode = require('qrcode');
 const uuid = require('uuid'); // Import uuid for generating unique IDs
 const fs = require('fs'); // Import fs for file system operations
-const cors = require('cors');
+// const cors = require('cors');
 const moment = require('moment');
 const path = require('path');
 
@@ -16,7 +16,7 @@ const path = require('path');
 const app = express();
 
 // Use the cors middleware
-app.use(cors());
+// app.use(cors());
 
 // Parse incoming JSON request bodies
 app.use(express.json());
