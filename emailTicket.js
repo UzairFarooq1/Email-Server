@@ -51,8 +51,11 @@ app.post('/send-email', upload.none(), async (req, res) => {
     // const ticketId = uuid();
 
     // Generate QR code from ticket data and ID
-    const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc, ticketId });
+    const verificationUrl = `https://your-server-url.com/verify-ticket/${ticketId}`;
+    const qrCodeData = JSON.stringify({ verificationUrl });
     const qrCodeImage = await QRCode.toDataURL(qrCodeData);
+    // const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc, ticketId });
+    // const qrCodeImage = await QRCode.toDataURL(qrCodeData);
 
     // Generate PDF attachment
     const pdfDoc = await PDFDocument.create();
