@@ -29,8 +29,9 @@ const upload = multer({ storage: storage });
 const transporter = nodemailer.createTransport({
   service: 'Gmail',
   auth: {
-    user: "hlprplatform@gmail.com",
-    pass: "xtrh tvgc vign wxmz"
+    user: "halaleventbrite@gmail.com",
+    pass: "ybbu qkcl ukbi pvxq
+"
   }
 });
 
@@ -107,7 +108,7 @@ app.post('/send-email', upload.none(), async (req, res) => {
 
     // Create email options
     const mailOptions = {
-      from: "hlprplatform@gmail.com",
+      from: "halaleventbrite@gmail.com",
       to: email,
       subject: 'Your Ticket Confirmation',
       text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${eventDesc}" has been confirmed.\n\nBest regards,\nHalal EventBrite Team`,
