@@ -3,14 +3,13 @@
   "builds": [
     {
       "src": "emailTicket.js",
-      "use": "@now/node"
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
       "dest": "emailTicket.js"
-      
     }
   ]
 }

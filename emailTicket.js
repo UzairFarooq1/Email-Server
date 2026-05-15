@@ -1,141 +1,252 @@
-// Require necessary modules
-require('dotenv').config();
-const express = require('express');
-const multer = require('multer');
-const nodemailer = require('nodemailer');
-const { PDFDocument } = require('pdf-lib');
-const QRCode = require('qrcode');
-const uuid = require('uuid'); // Import uuid for generating unique IDs
-const fs = require('fs'); // Import fs for file system operations
-const cors = require('cors');
-const moment = require('moment');
-const path = require('path');
+require("dotenv").config();
+const express = require("express");
+const multer = require("multer");
+const nodemailer = require("nodemailer");
+const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const path = require("path");
+const cors = require("cors");
+const { pathToFileURL } = require("url");
 
+const ticketPdfModuleUrl = pathToFileURL(
+  path.join(__dirname, "lib", "ticketPdf.mjs"),
+).href;
 
-// Create an Express app
+let ticketPdfModulePromise;
+const loadTicketPdfModule = () => {
+  if (!ticketPdfModulePromise) {
+    ticketPdfModulePromise = import(ticketPdfModuleUrl);
+  }
+  return ticketPdfModulePromise;
+};
+
 const app = express();
 
-// Use the cors middleware
 app.use(cors());
-
-// Parse incoming JSON request bodies
 app.use(express.json());
 
-// Set up Multer for handling file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-// Create Nodemailer transporter
 const transporter = nodemailer.createTransport({
-  service: 'Gmail',
+  service: "Gmail",
   auth: {
-    user: "halaleventbrite@gmail.com",
-    pass: "ybbu qkcl ukbi pvxq"
-  }
+    user: process.env.EMAIL_ADDRESS,
+    pass: process.env.EMAIL_PASSWORD,
+  },
 });
+
+const loadLogoBytes = () => {
+  const logoPathCandidates = [
+    path.join(__dirname, "heblogo.png"),
+    path.join(process.cwd(), "heblogo.png"),
+  ];
+  const logoPath = logoPathCandidates.find((candidate) =>
+    fs.existsSync(candidate),
+  );
+  return logoPath ? fs.readFileSync(logoPath) : null;
+};
+
+const generateTicketPdf = async (ticketData) => {
+  const { generateTicketPdfBytes } = await loadTicketPdfModule();
+  const ticketFor = ticketData.eventDesc || "Event";
+  const finalTicketId = ticketData.ticketId || uuidv4();
+  const pdfBytes = await generateTicketPdfBytes({
+    ticketFor,
+    finalTicketId,
+    full_name: ticketData.full_name,
+    phone_number: ticketData.phone_number,
+    type: ticketData.type,
+    gender: ticketData.gender,
+    email: ticketData.email,
+    amount: ticketData.amount,
+    mpesaReceipt: ticketData.mpesaReceipt,
+    eventDate: ticketData.eventDate,
+    eventTime: ticketData.eventTime,
+    eventLocation: ticketData.eventLocation,
+    organizerName: ticketData.organizerName,
+    logoBytes: loadLogoBytes(),
+  });
+
+  return {
+    pdfBytes,
+    ticketFor,
+    finalTicketId,
+  };
+};
+
+const buildConfirmationHtml = ({
+  full_name,
+  ticketFor,
+  type,
+  amount,
+  mpesaReceipt,
+  finalTicketId,
+}) =>
+  [
+    '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">',
+    "<h2>Ticket Confirmation</h2>",
+    `<p>Dear ${full_name},</p>`,
+    `<p>Thank you for your purchase. Your ticket for <strong>${ticketFor}</strong> has been confirmed.</p>`,
+    '<div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">',
+    "<h3>Ticket Details:</h3>",
+    `<p><strong>Ticket Type:</strong> ${type || "N/A"}</p>`,
+    `<p><strong>Amount:</strong> Ksh ${amount || "0.00"}</p>`,
+    `<p><strong>Mpesa Receipt:</strong> ${mpesaReceipt || "N/A"}</p>`,
+    `<p><strong>Ticket ID:</strong> ${finalTicketId}</p>`,
+    "</div>",
+    "<p>Your ticket PDF is attached to this email.</p>",
+    "<p>Best regards,<br>Halal EventBrite Team</p>",
+    "</div>",
+  ].join("");
 
 app.get("/", (req, res) => {
   res.send("HEB EMAIL SERVER");
-  var timeStamp = moment().format("YYYYMMDDHHmmss");
-  console.log(timeStamp);
 });
 
-// Define route for sending emails with attachments
-app.post('/send-email', upload.none(), async (req, res) => {
+app.post("/send-email", upload.none(), async (req, res) => {
   try {
-    // Extract data from request body
-    const { email, phone_number, type, full_name, gender, mpesaReceipt,ticketId, amount, eventDesc } = req.body;
-    // const ticketFor = 'Reviving hearts'; // Ticket for always equals to 'Reviving hearts'
+    const {
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    } = req.body;
 
-    // // Generate unique ID for the ticket
-    // const ticketId = uuid();
-
-    // Generate QR code from ticket data and ID
-    const qrCodeData = JSON.stringify({ full_name, phone_number, type, ticketId, gender, mpesaReceipt, amount, eventDesc, ticketId });
-    const qrCodeImage = await QRCode.toDataURL(qrCodeData);
-
-    // Generate PDF attachment
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage();
-
-    // Add PNG logo on the top left
-    let logoImage;
-    try {
-      let logoImageBytesPath = path.join(process.cwd(), 'heblogo.png');
-      let logoImageBytes = fs.readFileSync(logoImageBytesPath);
-      // const logoImageBytes = fs.readFileSync('heblogo.png');
-      logoImage = await pdfDoc.embedPng(logoImageBytes);
-    } catch (err) {
-      res.status(400).send('Error reading logo');
-      console.error('Error reading logo file:', err);
-      throw new Error('Logo file read error');
+    if (!email || !full_name) {
+      return res.status(400).json({
+        error: "Missing required fields: email and full_name are required",
+      });
     }
-    
-    const logoDims = 100;
-    page.drawImage(logoImage, {
-      x: page.getWidth() * 0.2, // Moved left by 20%
-      y: page.getHeight() * 0.7, // Moved up by 70%
-      width: logoDims,
-      height: logoDims,
+
+    const { pdfBytes, ticketFor, finalTicketId } = await generateTicketPdf({
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
     });
 
-    // Add ticket details
-    const textX = page.getWidth() * 0.2; // Moved left by 20%
-    let textY = page.getHeight() * 0.5; // Moved down by 50%
-
-    page.drawText(`Name: ${full_name}`, { x: textX, y: textY + 100, size: 18, align: 'center' });
-    page.drawText(`Ticket Type: ${type}`, { x: textX, y: textY + 70, size: 14, align: 'center' });
-    page.drawText(`Amount: ${amount}`, { x: textX, y: textY + 40, size: 14, align: 'center' });
-    page.drawText(`Mpesa Code: ${mpesaReceipt}`, { x: textX, y: textY + 10, size: 14, align: 'center' });
-    page.drawText(`Ticket For: ${eventDesc}`, { x: textX, y: textY - 15, size: 14, align: 'center' });
-    page.drawText(`Gender: ${gender}`, { x: textX + 150, y: textY + 70, size: 14, align: 'center' });
-    page.drawText(`Phone: ${phone_number}`, { x: textX + 150, y: textY + 40, size: 14, align: 'center' });
-
-
-    // Add QR code in the center
-    const qrDims = 200;
-    const qrX = (page.getWidth() - qrDims) / 2;
-    const qrY = textY - 220; // Pushed up by 120 units
-    const qrCodeImageBuffer = Buffer.from(qrCodeImage.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-    page.drawImage(await pdfDoc.embedPng(qrCodeImageBuffer), { x: qrX, y: qrY, width: qrDims, height: qrDims });
-
-    // Add ticket ID underneath the QR code
-    page.drawText(`Ticket ID: ${ticketId}`, { x: qrX, y: qrY - 20, size: 12 });
-
-    // Generate PDF bytes
-    const pdfBytes = await pdfDoc.save();
-
-    // Create email options
     const mailOptions = {
-      from: "halaleventbrite@gmail.com",
+      from: process.env.EMAIL_ADDRESS,
       to: email,
-      subject: 'Your Ticket Confirmation',
-      text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${eventDesc}" has been confirmed.\n\nBest regards,\nHalal EventBrite Team`,
+      subject: `Your Ticket Confirmation - ${ticketFor}`,
+      text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${ticketFor}" has been confirmed.\n\nTicket Details:\n- Ticket Type: ${
+        type || "N/A"
+      }\n- Amount: Ksh ${amount || "0.00"}\n- Mpesa Receipt: ${
+        mpesaReceipt || "N/A"
+      }\n- Ticket ID: ${finalTicketId}\n\nBest regards,\nHalal EventBrite Team`,
+      html: buildConfirmationHtml({
+        full_name,
+        ticketFor,
+        type,
+        amount,
+        mpesaReceipt,
+        finalTicketId,
+      }),
       attachments: [
         {
-          filename: 'ticket_confirmation.pdf',
-          content: pdfBytes,
-          encoding: 'base64'
-        }
-      ]
+          filename: "ticket_confirmation.pdf",
+          content: Buffer.from(pdfBytes),
+        },
+      ],
     };
 
-    // Send email
     await transporter.sendMail(mailOptions);
 
-    // Send a success response
-    res.status(200).send('Email sent successfully');
+    res.status(200).json({
+      success: true,
+      message: "Email sent successfully",
+      ticketId: finalTicketId,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Error sending email');
+    console.error("Error sending email:", error);
+    res.status(500).json({
+      error: "Error sending email",
+      message: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
   }
 });
 
-// Start the server
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.post("/ticket-pdf", async (req, res) => {
+  try {
+    const {
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    } = req.body;
+
+    if (!full_name && !ticketId) {
+      return res.status(400).json({
+        error: "Missing required ticket data",
+      });
+    }
+
+    const { pdfBytes, finalTicketId } = await generateTicketPdf({
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="ticket-${finalTicketId}.pdf"`,
+    );
+    res.status(200).send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error("Error generating ticket PDF:", error);
+    res.status(500).json({
+      error: "Error generating ticket PDF",
+      message: error.message,
+    });
+  }
 });
 
-// Export the app instance
+const PORT = process.env.PORT || 3007;
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
 module.exports = app;
