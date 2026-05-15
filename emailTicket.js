@@ -23,18 +23,33 @@ const loadTicketPdfModule = () => {
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-const transporter = nodemailer.createTransport({
-  service: "Gmail",
-  auth: {
-    user: process.env.EMAIL_ADDRESS,
-    pass: process.env.EMAIL_PASSWORD,
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
   },
 });
+const getEmailCredentials = () => {
+  const user = process.env.EMAIL_ADDRESS?.trim();
+  const pass = process.env.EMAIL_PASSWORD?.trim();
+  return user && pass ? { user, pass } : null;
+};
+
+const createTransporter = () => {
+  const credentials = getEmailCredentials();
+  if (!credentials) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    service: "Gmail",
+    auth: credentials,
+  });
+};
 
 const loadLogoBytes = () => {
   const logoPathCandidates = [
@@ -50,7 +65,7 @@ const loadLogoBytes = () => {
 const generateTicketPdf = async (ticketData) => {
   const { generateTicketPdfBytes } = await loadTicketPdfModule();
   const ticketFor = ticketData.eventDesc || "Event";
-  const finalTicketId = ticketData.ticketId || uuidv4();
+  const finalTicketId = ticketData.ticketId || uuid.v4();
   const pdfBytes = await generateTicketPdfBytes({
     ticketFor,
     finalTicketId,
@@ -100,10 +115,6 @@ const buildConfirmationHtml = ({
     "</div>",
   ].join("");
 
-app.get("/", (req, res) => {
-  res.send("HEB EMAIL SERVER");
-});
-
 app.post("/send-email", upload.none(), async (req, res) => {
   try {
     const {
@@ -125,6 +136,15 @@ app.post("/send-email", upload.none(), async (req, res) => {
     if (!email || !full_name) {
       return res.status(400).json({
         error: "Missing required fields: email and full_name are required",
+      });
+    }
+
+    const transporter = createTransporter();
+    if (!transporter) {
+      return res.status(503).json({
+        error: "Email service not configured",
+        message:
+          "Set EMAIL_ADDRESS and EMAIL_PASSWORD (Gmail app password) in environment variables.",
       });
     }
 
@@ -178,9 +198,14 @@ app.post("/send-email", upload.none(), async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending email:", error);
-    res.status(500).json({
+    const missingCredentials = error.message?.includes(
+      'Missing credentials for "PLAIN"',
+    );
+    res.status(missingCredentials ? 503 : 500).json({
       error: "Error sending email",
-      message: error.message,
+      message: missingCredentials
+        ? "Set EMAIL_ADDRESS and EMAIL_PASSWORD (Gmail app password) in environment variables."
+        : error.message,
       details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
