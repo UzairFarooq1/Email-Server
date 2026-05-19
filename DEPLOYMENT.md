@@ -28,7 +28,7 @@ SMTP_PASSWORD=replace-with-cpanel-mailbox-password
 SMTP_FROM=tickets@halaleventbrite.co.ke
 
 EMAIL_API_KEY=replace-with-long-random-secret
-ALLOWED_ORIGINS=https://ticketing.halaleventbrite.co.ke
+ALLOWED_ORIGINS=https://ticketing.halaleventbrite.co.ke,https://halal-eventbrite.vercel.app
 
 FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
 FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account"}
