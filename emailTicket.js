@@ -1,22 +1,29 @@
 require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
+const nodemailer = require("nodemailer");
+const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const path = require("path");
 const cors = require("cors");
-const { createTransporter, getFromAddress } = require("./lib/emailService");
-const { generateTicketPdf } = require("./lib/ticketPdfService");
-const { saveTicket } = require("./lib/ticketStorageService");
-const {
-  corsOptions,
-  emailRateLimiter,
-  requireApiKey,
-  validateOrigin,
-} = require("./lib/security");
+const { pathToFileURL } = require("url");
+
+const ticketPdfModuleUrl = pathToFileURL(
+  path.join(__dirname, "lib", "ticketPdf.mjs"),
+).href;
+
+let ticketPdfModulePromise;
+const loadTicketPdfModule = () => {
+  if (!ticketPdfModulePromise) {
+    ticketPdfModulePromise = import(ticketPdfModuleUrl);
+  }
+  return ticketPdfModulePromise;
+};
 
 const app = express();
 
 app.set("trust proxy", 1);
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -27,6 +34,62 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB
   },
 });
+const getEmailCredentials = () => {
+  const user = process.env.EMAIL_ADDRESS?.trim();
+  const pass = process.env.EMAIL_PASSWORD?.trim();
+  return user && pass ? { user, pass } : null;
+};
+
+const createTransporter = () => {
+  const credentials = getEmailCredentials();
+  if (!credentials) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    service: "Gmail",
+    auth: credentials,
+  });
+};
+
+const loadLogoBytes = () => {
+  const logoPathCandidates = [
+    path.join(__dirname, "heblogo.png"),
+    path.join(process.cwd(), "heblogo.png"),
+  ];
+  const logoPath = logoPathCandidates.find((candidate) =>
+    fs.existsSync(candidate),
+  );
+  return logoPath ? fs.readFileSync(logoPath) : null;
+};
+
+const generateTicketPdf = async (ticketData) => {
+  const { generateTicketPdfBytes } = await loadTicketPdfModule();
+  const ticketFor = ticketData.eventDesc || "Event";
+  const finalTicketId = ticketData.ticketId || uuid.v4();
+  const pdfBytes = await generateTicketPdfBytes({
+    ticketFor,
+    finalTicketId,
+    full_name: ticketData.full_name,
+    phone_number: ticketData.phone_number,
+    type: ticketData.type,
+    gender: ticketData.gender,
+    email: ticketData.email,
+    amount: ticketData.amount,
+    mpesaReceipt: ticketData.mpesaReceipt,
+    eventDate: ticketData.eventDate,
+    eventTime: ticketData.eventTime,
+    eventLocation: ticketData.eventLocation,
+    organizerName: ticketData.organizerName,
+    logoBytes: loadLogoBytes(),
+  });
+
+  return {
+    pdfBytes,
+    ticketFor,
+    finalTicketId,
+  };
+};
 
 const buildConfirmationHtml = ({
   full_name,
@@ -35,7 +98,6 @@ const buildConfirmationHtml = ({
   amount,
   mpesaReceipt,
   finalTicketId,
-  downloadUrl,
 }) =>
   [
     '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">',
@@ -49,136 +111,108 @@ const buildConfirmationHtml = ({
     `<p><strong>Mpesa Receipt:</strong> ${mpesaReceipt || "N/A"}</p>`,
     `<p><strong>Ticket ID:</strong> ${finalTicketId}</p>`,
     "</div>",
-    downloadUrl
-      ? `<p>Your ticket PDF is attached. You can also download it here: <a href="${downloadUrl}">Download ticket</a></p>`
-      : "<p>Your ticket PDF is attached to this email.</p>",
+    "<p>Your ticket PDF is attached to this email.</p>",
     "<p>Best regards,<br>Halal EventBrite Team</p>",
     "</div>",
   ].join("");
 
-app.post(
-  "/send-email",
-  emailRateLimiter,
-  validateOrigin,
-  requireApiKey,
-  upload.none(),
-  async (req, res) => {
-    try {
-      const {
-        email,
-        phone_number,
-        type,
-        full_name,
-        gender,
-        amount,
-        eventDesc,
-        ticketId,
-        mpesaReceipt,
-        eventDate,
-        eventTime,
-        eventLocation,
-        organizerName,
-      } = req.body;
+app.post("/send-email", upload.none(), async (req, res) => {
+  try {
+    const {
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    } = req.body;
 
-      if (!email || !full_name) {
-        return res.status(400).json({
-          error: "Missing required fields: email and full_name are required",
-        });
-      }
-
-      const transporter = createTransporter();
-      if (!transporter) {
-        return res.status(503).json({
-          error: "Email service not configured",
-          message:
-            "Set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, and SMTP_PASSWORD in environment variables.",
-        });
-      }
-
-      const ticketData = {
-        email,
-        phone_number,
-        type,
-        full_name,
-        gender,
-        amount,
-        eventDesc,
-        ticketId,
-        mpesaReceipt,
-        eventDate,
-        eventTime,
-        eventLocation,
-        organizerName,
-      };
-
-      const { pdfBytes, ticketFor, finalTicketId } =
-        await generateTicketPdf(ticketData);
-
-      const savedTicket = await saveTicket({
-        ticketId: finalTicketId,
-        ticketFor,
-        ticketData,
-        pdfBytes,
-      });
-
-      const mailOptions = {
-        from: getFromAddress(),
-        to: email,
-        subject: `Your Ticket Confirmation - ${ticketFor}`,
-        text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${ticketFor}" has been confirmed.\n\nTicket Details:\n- Ticket Type: ${
-          type || "N/A"
-        }\n- Amount: Ksh ${amount || "0.00"}\n- Mpesa Receipt: ${
-          mpesaReceipt || "N/A"
-        }\n- Ticket ID: ${finalTicketId}\n\nBest regards,\nHalal EventBrite Team`,
-        html: buildConfirmationHtml({
-          full_name,
-          ticketFor,
-          type,
-          amount,
-          mpesaReceipt,
-          finalTicketId,
-          downloadUrl: savedTicket.downloadUrl,
-        }),
-        attachments: [
-          {
-            filename: "ticket_confirmation.pdf",
-            content: Buffer.from(pdfBytes),
-          },
-        ],
-      };
-
-      await transporter.sendMail(mailOptions);
-
-      res.status(200).json({
-        success: true,
-        message: "Email sent successfully",
-        ticketId: finalTicketId,
-        storagePath: savedTicket.storagePath,
-        ticketUrl: savedTicket.downloadUrl,
-      });
-    } catch (error) {
-      console.error("Error sending email:", error);
-      const missingCredentials = error.message?.includes(
-        'Missing credentials for "PLAIN"',
-      );
-      res.status(missingCredentials ? 503 : 500).json({
-        error: "Error sending email",
-        message: missingCredentials
-          ? "Set SMTP_USER and SMTP_PASSWORD in environment variables."
-          : error.message,
-        details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
+    if (!email || !full_name) {
+      return res.status(400).json({
+        error: "Missing required fields: email and full_name are required",
       });
     }
-  },
-);
 
-app.post(
-  "/ticket-pdf",
-  emailRateLimiter,
-  validateOrigin,
-  requireApiKey,
-  async (req, res) => {
+    const transporter = createTransporter();
+    if (!transporter) {
+      return res.status(503).json({
+        error: "Email service not configured",
+        message:
+          "Set EMAIL_ADDRESS and EMAIL_PASSWORD (Gmail app password) in environment variables.",
+      });
+    }
+
+    const { pdfBytes, ticketFor, finalTicketId } = await generateTicketPdf({
+      email,
+      phone_number,
+      type,
+      full_name,
+      gender,
+      amount,
+      eventDesc,
+      ticketId,
+      mpesaReceipt,
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    });
+
+    const mailOptions = {
+      from: process.env.EMAIL_ADDRESS,
+      to: email,
+      subject: `Your Ticket Confirmation - ${ticketFor}`,
+      text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${ticketFor}" has been confirmed.\n\nTicket Details:\n- Ticket Type: ${
+        type || "N/A"
+      }\n- Amount: Ksh ${amount || "0.00"}\n- Mpesa Receipt: ${
+        mpesaReceipt || "N/A"
+      }\n- Ticket ID: ${finalTicketId}\n\nBest regards,\nHalal EventBrite Team`,
+      html: buildConfirmationHtml({
+        full_name,
+        ticketFor,
+        type,
+        amount,
+        mpesaReceipt,
+        finalTicketId,
+      }),
+      attachments: [
+        {
+          filename: "ticket_confirmation.pdf",
+          content: Buffer.from(pdfBytes),
+        },
+      ],
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({
+      success: true,
+      message: "Email sent successfully",
+      ticketId: finalTicketId,
+    });
+  } catch (error) {
+    console.error("Error sending email:", error);
+    const missingCredentials = error.message?.includes(
+      'Missing credentials for "PLAIN"',
+    );
+    res.status(missingCredentials ? 503 : 500).json({
+      error: "Error sending email",
+      message: missingCredentials
+        ? "Set EMAIL_ADDRESS and EMAIL_PASSWORD (Gmail app password) in environment variables."
+        : error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
+});
+
+app.post("/ticket-pdf", async (req, res) => {
   try {
     const {
       email,
@@ -231,8 +265,7 @@ app.post(
       message: error.message,
     });
   }
-  },
-);
+});
 
 const PORT = process.env.PORT || 3007;
 
