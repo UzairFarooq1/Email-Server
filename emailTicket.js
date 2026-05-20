@@ -97,7 +97,7 @@ const loadLogoBytes = () => {
 const generateTicketPdf = async (ticketData) => {
   const { generateTicketPdfBytes } = await loadTicketPdfModule();
   const ticketFor = ticketData.eventDesc || "Event";
-  const finalTicketId = ticketData.ticketId || uuid.v4();
+  const finalTicketId = ticketData.ticketId || uuidv4();
   const pdfBytes = await generateTicketPdfBytes({
     ticketFor,
     finalTicketId,
