@@ -51,23 +51,13 @@ const getEmailCredentials = () => {
 };
 
 const createTransporter = () => {
-  const credentials = getEmailCredentials();
-
-  if (!credentials) {
-    return null;
-  }
-
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: process.env.SMTP_SECURE === "true", // true for 465
+    port: Number(process.env.SMTP_PORT),
+    secure: process.env.SMTP_SECURE === "true",
     auth: {
-      user: credentials.user,
-      pass: credentials.pass,
-    },
-
-    tls: {
-      rejectUnauthorized: false, // optional if SSL issues appear
+      user: process.env.EMAIL_ADDRESS,
+      pass: process.env.EMAIL_PASSWORD,
     },
   });
 };
