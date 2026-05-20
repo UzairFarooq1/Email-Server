@@ -26,6 +26,15 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+app.get("/smtp-debug", (req, res) => {
+  res.json({
+    EMAIL_ADDRESS: process.env.EMAIL_ADDRESS,
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_SECURE: process.env.SMTP_SECURE,
+  });
+});
+
 app.get("/", (req, res) => {
   res.json({
     status: "OK",
