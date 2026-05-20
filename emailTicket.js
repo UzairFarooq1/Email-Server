@@ -49,6 +49,11 @@ const getEmailCredentials = () => {
   const pass = process.env.EMAIL_PASSWORD?.trim();
   return user && pass ? { user, pass } : null;
 };
+console.log({
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_SECURE: process.env.SMTP_SECURE,
+});
 
 const createTransporter = () => {
   return nodemailer.createTransport({
