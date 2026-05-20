@@ -41,15 +41,36 @@ const getEmailCredentials = () => {
 
 const createTransporter = () => {
   const credentials = getEmailCredentials();
+
   if (!credentials) {
     return null;
   }
 
   return nodemailer.createTransport({
-    service: "Gmail",
-    auth: credentials,
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: process.env.SMTP_SECURE === "true", // true for 465
+    auth: {
+      user: credentials.user,
+      pass: credentials.pass,
+    },
+
+    tls: {
+      rejectUnauthorized: false, // optional if SSL issues appear
+    },
   });
 };
+// const createTransporter = () => {
+//   const credentials = getEmailCredentials();
+//   if (!credentials) {
+//     return null;
+//   }
+
+//   return nodemailer.createTransport({
+//     service: "Gmail",
+//     auth: credentials,
+//   });
+// };
 
 const loadLogoBytes = () => {
   const logoPathCandidates = [
