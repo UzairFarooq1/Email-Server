@@ -169,6 +169,13 @@ app.post("/send-email", upload.none(), async (req, res) => {
       organizerName,
     } = req.body;
 
+    console.log("EMAIL DATA RECEIVED:", {
+      eventDate,
+      eventTime,
+      eventLocation,
+      organizerName,
+    });
+
     if (!email || !full_name) {
       return res.status(400).json({
         error: "Missing required fields: email and full_name are required",
