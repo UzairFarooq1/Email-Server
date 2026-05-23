@@ -208,7 +208,7 @@ app.post("/send-email", upload.none(), async (req, res) => {
     });
 
     const mailOptions = {
-      from: process.env.EMAIL_ADDRESS,
+      from: `"Halal Eventbrite" <${process.env.EMAIL_ADDRESS}>`,
       to: email,
       subject: `Your Ticket Confirmation - ${ticketFor}`,
       text: `Dear ${full_name},\n\nThank you for your purchase. Your ticket for "${ticketFor}" has been confirmed.\n\nTicket Details:\n- Ticket Type: ${
